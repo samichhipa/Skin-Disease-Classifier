@@ -80,12 +80,12 @@ public class ImageClassifierRealtime {
     /**
      * Name of the model file stored in Assets.
      */
-    private static final String MODEL_PATH = "optimized_graph.lite";
+    private static final String MODEL_PATH = "model_unquant.tflite";
 
     /**
      * Name of the label file stored in Assets.
      */
-    private static final String LABEL_PATH = "retrained_labels.txt";
+    private static final String LABEL_PATH = "labels.txt";
 
     /**
      * Number of results to show in the UI.
