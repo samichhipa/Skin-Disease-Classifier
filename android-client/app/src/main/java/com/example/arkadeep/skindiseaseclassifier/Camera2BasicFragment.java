@@ -23,6 +23,7 @@ import android.app.DialogFragment;
 import android.app.Fragment;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
@@ -42,9 +43,13 @@ import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.ImageReader;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.support.annotation.NonNull;
 import android.support.v13.app.FragmentCompat;
 import android.support.v4.app.ActivityCompat;
@@ -56,6 +61,8 @@ import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -65,6 +72,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
@@ -85,7 +93,10 @@ public class Camera2BasicFragment extends Fragment
   private boolean runClassifier = false;
   private boolean checkedPermissions = false;
   private TextView textView;
+  private SpeechRecognizer speechRecognizer;
+  Button StartDetection;
   private ImageClassifierRealtime classifier;
+  public static final Integer RecordAudioRequestCode = 1;
 
   /** Max preview width that is guaranteed by Camera2 API */
   private static final int MAX_PREVIEW_WIDTH = 1920;
@@ -216,6 +227,11 @@ public class Camera2BasicFragment extends Fragment
                 @Override
                 public void run() {
                   textView.setText(text);
+                  if(StartDetection.getText().toString().equals("Detection Started"))
+                  {
+                   objectsDetected.add(text);
+                  }
+
                 }
               });
     }
@@ -291,10 +307,100 @@ public class Camera2BasicFragment extends Fragment
   }
 
   /** Connect the buttons to their event handler. */
+
+  ArrayList objectsDetected= new ArrayList();
+  ArrayList WordsDetected= new ArrayList();
+
   @Override
   public void onViewCreated(final View view, Bundle savedInstanceState) {
+    if(ContextCompat.checkSelfPermission(getActivity(),Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED){
+      checkPermission();
+    }
+
+    speechRecognizer = SpeechRecognizer.createSpeechRecognizer(getActivity());
+
+
     textureView = (AutoFitTextureView) view.findViewById(R.id.texture);
     textView = (TextView) view.findViewById(R.id.text);
+    StartDetection =view.findViewById(R.id.StartDetection);
+
+
+    Locale locale = new Locale("ar");
+    Locale.setDefault(locale);
+    Configuration config = new Configuration();
+    config.locale = locale;
+    getResources().updateConfiguration(config,getResources().getDisplayMetrics());
+    final Intent speechRecognizerIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+    speechRecognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+    speechRecognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE,locale);
+speechRecognizer.setRecognitionListener(new RecognitionListener() {
+  @Override
+  public void onReadyForSpeech(Bundle bundle) {
+
+  }
+
+  @Override
+  public void onBeginningOfSpeech() {
+
+  }
+
+  @Override
+  public void onRmsChanged(float v) {
+
+  }
+
+  @Override
+  public void onBufferReceived(byte[] bytes) {
+
+  }
+
+  @Override
+  public void onEndOfSpeech() {
+
+  }
+
+  @Override
+  public void onError(int i) {
+
+  }
+
+  @Override
+  public void onResults(Bundle bundle) {
+    objectsDetected.clear();
+    ArrayList<String> data = bundle.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+    objectsDetected.add(data.get(0));
+    Toast.makeText(getActivity(), ""+data.get(0), Toast.LENGTH_SHORT).show();
+  }
+
+  @Override
+  public void onPartialResults(Bundle bundle) {
+    objectsDetected.clear();
+    ArrayList<String> data = bundle.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+    Toast.makeText(getActivity(), ""+data.get(0), Toast.LENGTH_SHORT).show();
+  }
+
+  @Override
+  public void onEvent(int i, Bundle bundle) {
+
+  }
+});
+
+    StartDetection.setOnClickListener(new View.OnClickListener() {
+      @Override
+      public void onClick(View view) {
+      if(StartDetection.getText().toString().equals("Detection Started"))
+      {        speechRecognizer.startListening(speechRecognizerIntent);
+
+        StartDetection.setText("Stop Detection");
+      }
+      else {
+        speechRecognizer.startListening(speechRecognizerIntent);
+        StartDetection.setText("Detection Started");
+
+
+      }
+      }
+    });
   }
 
   /** Load the model and labels. */
@@ -335,6 +441,7 @@ public class Camera2BasicFragment extends Fragment
   @Override
   public void onDestroy() {
     classifier.close();
+    speechRecognizer.destroy();
     super.onDestroy();
   }
 
@@ -519,11 +626,6 @@ public class Camera2BasicFragment extends Fragment
     return true;
   }
 
-  @Override
-  public void onRequestPermissionsResult(
-          int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-    super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-  }
 
   /** Closes the current {@link CameraDevice}. */
   private void closeCamera() {
@@ -701,7 +803,14 @@ public class Camera2BasicFragment extends Fragment
           (long) lhs.getWidth() * lhs.getHeight() - (long) rhs.getWidth() * rhs.getHeight());
     }
   }
-
+  @Override
+  public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    if (requestCode == RecordAudioRequestCode && grantResults.length > 0 ){
+      if(grantResults[0] == PackageManager.PERMISSION_GRANTED)
+        Toast.makeText(getActivity(),"Permission Granted",Toast.LENGTH_SHORT).show();
+    }
+  }
   /** Shows an error message dialog. */
   public static class ErrorDialog extends DialogFragment {
 
@@ -731,4 +840,14 @@ public class Camera2BasicFragment extends Fragment
           .create();
     }
   }
+
+
+
+  private void checkPermission() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+      ActivityCompat.requestPermissions(getActivity(),new String[]{Manifest.permission.RECORD_AUDIO},RecordAudioRequestCode);
+    }
+  }
+
+
 }
