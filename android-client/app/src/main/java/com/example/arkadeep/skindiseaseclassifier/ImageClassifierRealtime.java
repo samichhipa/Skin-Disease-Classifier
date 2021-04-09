@@ -6,6 +6,8 @@ import android.graphics.Bitmap;
 import android.os.SystemClock;
 import android.util.Log;
 
+import com.example.arkadeep.skindiseaseclassifier.Adapter.ModelData;
+
 import org.tensorflow.lite.Interpreter;
 
 import java.io.BufferedReader;
@@ -41,31 +43,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
-
-
-import android.app.Activity;
-import android.content.res.AssetFileDescriptor;
-import android.graphics.Bitmap;
-import android.os.SystemClock;
-import android.support.v7.app.AppCompatActivity;
-import android.util.Log;
-
-import org.tensorflow.lite.Interpreter;
-
-import java.io.BufferedReader;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
-import java.util.AbstractMap;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
-import java.util.PriorityQueue;
 
 /**
  * Classifies images with Tensorflow Lite.
@@ -134,6 +111,7 @@ public class ImageClassifierRealtime {
     private float[][] filterLabelProbArray = null;
     private static final int FILTER_STAGES = 3;
     private static final float FILTER_FACTOR = 0.4f;
+    List<ModelData> modelDataList;
 
     private PriorityQueue<Map.Entry<String, Float>> sortedLabels =
             new PriorityQueue<>(
@@ -163,10 +141,10 @@ public class ImageClassifierRealtime {
     /**
      * Classifies a frame from the preview stream.
      */
-    String classifyFrame(Bitmap bitmap) {
+    List<ModelData> classifyFrame(Bitmap bitmap) {
         if (tflite == null) {
             Log.e(TAG, "Image classifier has not been initialized; Skipped.");
-            return "Uninitialized Classifier.";
+           // return "Uninitialized Classifier.";
         }
         convertBitmapToByteBuffer(bitmap);
         // Here's where the magic happens!!!
@@ -179,9 +157,9 @@ public class ImageClassifierRealtime {
         applyFilter();
 
         // print the results
-        String textToShow = printTopKLabels();
-        textToShow = Long.toString(endTime - startTime) + "ms" + textToShow;
-        return textToShow;
+       // String textToShow = printTopKLabels();
+      //  textToShow = Long.toString(endTime - startTime) + "ms" + textToShow;
+        return printTopKLabels();
     }
 
     void applyFilter() {
@@ -270,7 +248,8 @@ public class ImageClassifierRealtime {
     /**
      * Prints top-K labels, to be shown in UI as the results.
      */
-    private String printTopKLabels() {
+    private List<ModelData> printTopKLabels() {
+        modelDataList=new ArrayList<>();
         for (int i = 0; i < labelList.size(); ++i) {
             sortedLabels.add(
                     new AbstractMap.SimpleEntry<>(labelList.get(i), labelProbArray[0][i]));
@@ -280,10 +259,18 @@ public class ImageClassifierRealtime {
         }
         String textToShow = "";
         final int size = sortedLabels.size();
-        for (int i = 0; i < size; ++i) {
+        modelDataList.clear();
+        for (int i = 0; i < size; i++) {
             Map.Entry<String, Float> label = sortedLabels.poll();
-            textToShow = String.format("\n%s: %4.2f", label.getKey(), label.getValue()) + textToShow;
+            if (label.getValue()>0.75){
+                ModelData modelData=new ModelData(String.valueOf(label.getValue()),String.valueOf(label.getKey()));
+                modelDataList.add(modelData);
+            }
+
+            //textToShow=String.valueOf(label.getValue());
+
+          //  textToShow = String.format("\n%s: %4.2f", label.getKey(), label.getValue()) + textToShow;
         }
-        return textToShow;
+        return modelDataList;
     }
 }

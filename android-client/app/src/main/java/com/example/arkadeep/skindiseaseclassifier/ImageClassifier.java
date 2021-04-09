@@ -19,7 +19,6 @@ import android.app.Activity;
 import android.content.res.AssetFileDescriptor;
 import android.graphics.Bitmap;
 import android.os.SystemClock;
-import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 
 import org.tensorflow.lite.Interpreter;

@@ -27,6 +27,7 @@ import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
@@ -50,10 +51,14 @@ import android.os.HandlerThread;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
-import android.support.annotation.NonNull;
-import android.support.v13.app.FragmentCompat;
-import android.support.v4.app.ActivityCompat;
-import android.support.v4.content.ContextCompat;
+import androidx.annotation.NonNull;
+import androidx.legacy.app.FragmentCompat;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import android.text.TextUtils;
 import android.util.Log;
 import android.util.Size;
 import android.view.LayoutInflater;
@@ -62,9 +67,13 @@ import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import com.example.arkadeep.skindiseaseclassifier.Adapter.ModelData;
+import com.example.arkadeep.skindiseaseclassifier.Adapter.PicturesAdapter;
+import com.example.arkadeep.skindiseaseclassifier.Adapter.Signs;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -78,7 +87,7 @@ import java.util.concurrent.TimeUnit;
 
 /** Basic fragments for the Camera. */
 public class Camera2BasicFragment extends Fragment
-        implements FragmentCompat.OnRequestPermissionsResultCallback {
+        implements FragmentCompat.OnRequestPermissionsResultCallback, PicturesAdapter.onItemClickListener{
 
   /** Tag for the {@link Log}. */
   private static final String TAG = "TfLiteCameraDemo";
@@ -88,21 +97,32 @@ public class Camera2BasicFragment extends Fragment
   private static final String HANDLE_THREAD_NAME = "CameraBackground";
 
   private static final int PERMISSIONS_REQUEST_CODE = 1;
+  public static int isItemSelectedPos=0;
 
   private final Object lock = new Object();
   private boolean runClassifier = false;
   private boolean checkedPermissions = false;
   private TextView textView;
   private SpeechRecognizer speechRecognizer;
-  Button StartDetection;
+  TextView StartDetection;
   private ImageClassifierRealtime classifier;
   public static final Integer RecordAudioRequestCode = 1;
+  String selectedLabel="";
 
   /** Max preview width that is guaranteed by Camera2 API */
-  private static final int MAX_PREVIEW_WIDTH = 1920;
+  private static final int MAX_PREVIEW_WIDTH = getScreenWidth();
 
   /** Max preview height that is guaranteed by Camera2 API */
-  private static final int MAX_PREVIEW_HEIGHT = 1080;
+  private static final int MAX_PREVIEW_HEIGHT = getScreenHeight();
+  public static int getScreenWidth() {
+    return Resources.getSystem().getDisplayMetrics().widthPixels;
+  }
+
+  public static int getScreenHeight() {
+    return Resources.getSystem().getDisplayMetrics().heightPixels;
+  }
+
+  RecyclerView recyclerView;
 
   /**
    * {@link TextureView.SurfaceTextureListener} handles several lifecycle events on a {@link
@@ -133,6 +153,7 @@ public class Camera2BasicFragment extends Fragment
 
   /** ID of the current {@link CameraDevice}. */
   private String cameraId;
+  PicturesAdapter picturesAdapter;
 
   /** An {@link AutoFitTextureView} for camera preview. */
   private AutoFitTextureView textureView;
@@ -303,7 +324,27 @@ public class Camera2BasicFragment extends Fragment
   @Override
   public View onCreateView(
           LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-    return inflater.inflate(R.layout.fragment_camera2_basic, container, false);
+    View view=inflater.inflate(R.layout.fragment_camera2_basic, container, false);
+    recyclerView=view.findViewById(R.id.recyclerview);
+    LinearLayoutManager linearLayoutManager=new LinearLayoutManager(getActivity());
+    linearLayoutManager.setOrientation(RecyclerView.HORIZONTAL);
+    recyclerView.setLayoutManager(linearLayoutManager);
+    List<Signs> list=new ArrayList<>();
+    list.add(new Signs("Anna",R.drawable.anna));
+    list.add(new Signs("Anta",R.drawable.anta));
+    list.add(new Signs("Antum",R.drawable.antum));
+    list.add(new Signs("Antuma",R.drawable.antuma));
+    list.add(new Signs("Humma",R.drawable.humma));
+    list.add(new Signs("Hua",R.drawable.hua));
+    list.add(new Signs("Hum",R.drawable.hum));
+    list.add(new Signs("Nahno",R.drawable.nahno));
+    list.add(new Signs("Palm",R.drawable.nahno));
+    list.add(new Signs("Thumb",R.drawable.nahno));
+     picturesAdapter=new PicturesAdapter(list,getActivity());
+    recyclerView.setAdapter(picturesAdapter);
+    picturesAdapter.setOnItemClickListener(Camera2BasicFragment.this);
+    picturesAdapter.notifyDataSetChanged();
+    return view;
   }
 
   /** Connect the buttons to their event handler. */
@@ -326,10 +367,10 @@ public class Camera2BasicFragment extends Fragment
 
 
     Locale locale = new Locale("ar");
-    Locale.setDefault(locale);
-    Configuration config = new Configuration();
-    config.locale = locale;
-    getResources().updateConfiguration(config,getResources().getDisplayMetrics());
+/*    Locale.setDefault(locale);*/
+/*    Configuration config = new Configuration();
+    config.locale = locale;*/
+  //  getResources().updateConfiguration(config,getResources().getDisplayMetrics());
     final Intent speechRecognizerIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
     speechRecognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
     speechRecognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE,locale);
@@ -783,14 +824,42 @@ speechRecognizer.setRecognitionListener(new RecognitionListener() {
   /** Classifies a frame from the preview stream. */
   private void classifyFrame() {
     if (classifier == null || getActivity() == null || cameraDevice == null) {
+      textView.setTextColor(getActivity().getResources().getColor(R.color.red));
       showToast("Uninitialized Classifier or invalid context.");
       return;
     }
     Bitmap bitmap =
-        textureView.getBitmap(ImageClassifierRealtime.DIM_IMG_SIZE_X, ImageClassifierRealtime.DIM_IMG_SIZE_Y);
-    String textToShow = classifier.classifyFrame(bitmap);
-    bitmap.recycle();
-    showToast(textToShow);
+            textureView.getBitmap(ImageClassifierRealtime.DIM_IMG_SIZE_X, ImageClassifierRealtime.DIM_IMG_SIZE_Y);
+    List<ModelData> textToShow = classifier.classifyFrame(bitmap);
+    if (textToShow.size() > 0) {
+      bitmap.recycle();
+
+      if (!TextUtils.isEmpty(selectedLabel) && textToShow.get(0).getLabel().equals(selectedLabel)) {
+        if (Float.valueOf(textToShow.get(0).getProbability())>0.75){
+          showToast(textToShow.get(0).getLabel());
+          textView.setTextColor(getActivity().getResources().getColor(R.color.green));
+
+        }else {
+          textView.setTextColor(getActivity().getResources().getColor(R.color.grey));
+          showToast("Detecting..");
+        }
+
+      } else {
+        textView.setTextColor(getActivity().getResources().getColor(R.color.red));
+        showToast("Select Correct Sign");
+      }
+
+    }
+  }
+
+  @Override
+  public void SignClick(Signs signs,LinearLayout linearLayout, int position) {
+    isItemSelectedPos=position;
+    selectedLabel=signs.getName();
+/*
+    Toast.makeText(getActivity(), ""+selectedLabel, Toast.LENGTH_SHORT).show();
+*/
+
   }
 
   /** Compares two {@code Size}s based on their areas. */
